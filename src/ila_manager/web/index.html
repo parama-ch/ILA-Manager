@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ILA Manager — Vivado ILA Port Manager & TCL Generator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <span class="logo-badge">ILA</span>
+      <div class="title-group">
+        <h1 data-i18n="app_title">ILA Manager</h1>
+        <p data-i18n="app_subtitle">Vivado ILA Port Manager & TCL Generator</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-sm" id="btn-open-proj" data-i18n="load_project">📂 Open Project</button>
+      <button class="btn btn-sm" id="btn-save-proj" data-i18n="save_project">💾 Save Project</button>
+      <button class="btn btn-sm" id="btn-import-existing" data-i18n="import_existing">📥 Import Existing</button>
+      <div style="border-left: 1px solid var(--border-color); height: 20px; margin: 0 4px;"></div>
+      <button class="btn btn-sm" id="btn-lang-toggle">🌐 EN / TH</button>
+      <button class="btn btn-sm" id="btn-theme-toggle">🌓</button>
+    </div>
+  </header>
+
+  <!-- Main Three-Column Grid -->
+  <div class="main-container">
+    <!-- Left Column: Sources & Signals -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2 data-i18n="sources_title">📦 HDL Sources & Signals</h2>
+        <button class="btn btn-sm" id="btn-browse-files" data-i18n="browse_files">Browse</button>
+      </div>
+      <div class="panel-body">
+        <!-- Drag & Drop Zone -->
+        <div class="drop-zone" id="hdl-drop-zone">
+          <div class="drop-icon">📁</div>
+          <div class="drop-text" data-i18n="drop_prompt">Drag & drop Verilog (.v, .sv) or VHDL (.vhd) here</div>
+          <input type="file" id="hdl-file-input" multiple accept=".v,.sv,.vhd,.vhdl,.tcl,.ilaproj" style="display: none;">
+        </div>
+
+        <!-- Target Unit Selector -->
+        <div class="form-group">
+          <label for="select-target-unit" data-i18n="target_unit">Target Module / Unit:</label>
+          <select id="select-target-unit">
+            <option value="">-- No HDL loaded --</option>
+          </select>
+        </div>
+
+        <!-- Signal Search & Filter -->
+        <div class="form-group">
+          <input type="text" id="signal-search" placeholder="Search signals..." data-i18n-ph="search_signals">
+          <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all" data-i18n="filter_all">All</button>
+            <button class="filter-btn" data-filter="ports" data-i18n="filter_ports">Ports</button>
+            <button class="filter-btn" data-filter="signals" data-i18n="filter_signals">Signals</button>
+          </div>
+        </div>
+
+        <!-- Extracted Signals List -->
+        <div class="signal-list" id="signal-list-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Column: ILA Port Manager & Options -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2 data-i18n="probes_title">⚡ ILA Port Manager</h2>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-sm" id="btn-add-probe" data-i18n="add_probe">+ Add Probe</button>
+          <button class="btn btn-sm" id="btn-swap-probes" data-i18n="swap_probes">⇄ Swap Probes</button>
+          <button class="btn btn-sm btn-danger" id="btn-clear-probes" data-i18n="clear_all">Clear</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <!-- Global Options Toolbar -->
+        <div class="options-bar">
+          <div class="form-group">
+            <label for="opt-ila-name" data-i18n="ila_name">ILA IP Name:</label>
+            <input type="text" id="opt-ila-name" value="ila_0">
+          </div>
+          <div class="form-group">
+            <label for="opt-clock-signal" data-i18n="clock_signal">Clock Signal:</label>
+            <input type="text" id="opt-clock-signal" value="clk">
+          </div>
+          <div class="form-group">
+            <label for="opt-pipe-stages" data-i18n="pipe_stages">FF Pipeline Stages:</label>
+            <!-- User requirement: default is 4! -->
+            <select id="opt-pipe-stages">
+              <option value="0">0</option>
+              <option value="1">1 (Vivado Def)</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4 (Recommended)</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="opt-data-depth" data-i18n="data_depth">Sample Depth:</label>
+            <select id="opt-data-depth">
+              <option value="1024" selected>1024</option>
+              <option value="2048">2048</option>
+              <option value="4096">4096</option>
+              <option value="8192">8192</option>
+              <option value="16384">16384</option>
+              <option value="32768">32768</option>
+              <option value="65536">65536</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label data-i18n="trigger_mode">Trigger Match Units:</label>
+            <div style="display: flex; gap: 14px; margin-top: 4px;">
+              <label class="checkbox-group">
+                <input type="radio" name="opt-mu-mode" id="opt-mu-same" value="same" checked>
+                <span data-i18n="same_mu">Same count for all</span>
+              </label>
+              <label class="checkbox-group">
+                <input type="radio" name="opt-mu-mode" id="opt-mu-indiv" value="individual">
+                <span data-i18n="individual_mu">Individual per probe</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Probes Table -->
+        <div class="probe-table-container">
+          <table class="probe-table" id="probes-table">
+            <thead>
+              <tr>
+                <th style="width: 70px;" data-i18n="probe_col_idx">#</th>
+                <th data-i18n="probe_col_mapping">Mapped Signal / Slice</th>
+                <th style="width: 80px;" data-i18n="probe_col_width">Width</th>
+                <th style="width: 140px;" data-i18n="probe_col_type">Probe Type</th>
+                <th style="width: 60px;" data-i18n="probe_col_mu">MU</th>
+                <th style="width: 110px;" data-i18n="probe_col_actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="probes-table-body">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Live Output Code -->
+    <div class="panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="tcl" data-i18n="tab_tcl">Vivado TCL</button>
+        <button class="tab-btn" data-tab="vhdl" data-i18n="tab_vhdl">VHDL Port Map</button>
+        <button class="tab-btn" data-tab="verilog" data-i18n="tab_verilog">Verilog Port Map</button>
+      </div>
+      <div class="code-container">
+        <div class="code-floating-actions">
+          <button class="btn btn-sm" id="btn-copy-code" data-i18n="copy_code">📋 Copy</button>
+          <button class="btn btn-sm" id="btn-download-code" data-i18n="download_code">⬇ Download</button>
+        </div>
+        <pre class="code-block"><code id="code-output"># Code will appear here...</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Swap Probes -->
+  <div class="modal-overlay hidden" id="modal-swap">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 data-i18n="swap_title">Swap Probe Positions</h3>
+        <button class="icon-btn close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="swap-select-a" data-i18n="swap_probe_a">First Probe:</label>
+          <select id="swap-select-a"></select>
+        </div>
+        <div class="form-group">
+          <label for="swap-select-b" data-i18n="swap_probe_b">Second Probe:</label>
+          <select id="swap-select-b"></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn close-modal" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-swap" data-i18n="swap_confirm">Swap</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Bit Slice / Array Config -->
+  <div class="modal-overlay hidden" id="modal-slice">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 data-i18n="slice_title">Configure Bit Slice / Array Index</h3>
+        <button class="icon-btn close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="slice-signal-info" style="font-family: var(--font-mono); font-size: 13px; color: var(--accent-color);"></div>
+        <div class="form-group" id="group-array-idx">
+          <label for="slice-input-idx" data-i18n="slice_index">Array Index:</label>
+          <input type="number" id="slice-input-idx" min="0" placeholder="e.g. 0">
+        </div>
+        <div class="form-group" id="group-record-field">
+          <label for="slice-select-field">Record Field:</label>
+          <select id="slice-select-field"></select>
+        </div>
+        <div class="form-group" id="group-bit-range">
+          <label for="slice-input-range" data-i18n="slice_range">Bit Range (e.g. 15 downto 8 or [15:8]):</label>
+          <input type="text" id="slice-input-range" placeholder="e.g. 7 downto 0">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn close-modal" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-slice" data-i18n="slice_apply">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Diff Review -->
+  <div class="modal-overlay hidden" id="modal-diff">
+    <div class="modal-box" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 data-i18n="diff_title">⚠️ HDL Signal Changes Detected</h3>
+        <button class="icon-btn close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p data-i18n="diff_desc" style="font-size: 13px; color: var(--text-secondary);">Some mapped signals have changed width or are no longer found in the loaded HDL files:</p>
+        <div id="diff-items-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn close-modal" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-apply-diff" data-i18n="apply_fixes">Apply Selected Actions</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast hidden" id="toast-msg"></div>
+
+  <!-- Application Scripts (ES Modules) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

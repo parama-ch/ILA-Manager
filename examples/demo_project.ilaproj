@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "source_files": [
+    "axis_pkg.vhd",
+    "sample_uart_rx.vhd"
+  ],
+  "ilas": [
+    {
+      "name": "ila_uart_rx",
+      "target_file": "sample_uart_rx.vhd",
+      "target_unit": "sample_uart_rx.rtl",
+      "clock": "clk",
+      "pipe_stages": 4,
+      "data_depth": 1024,
+      "same_mu": true,
+      "same_mu_cnt": 1,
+      "strg_qual": false,
+      "ip_dir": null,
+      "run_ooc_synth": true,
+      "probes": [
+        {
+          "index": 0,
+          "mapping": {
+            "signal": "rx_data",
+            "path": []
+          },
+          "width": 1,
+          "probe_type": "DATA_AND_TRIGGER",
+          "mu_cnt": 1,
+          "label": "",
+          "snapshot": {
+            "name": "rx_data",
+            "width": 1,
+            "kind": "signal",
+            "type_summary": "std_logic"
+          }
+        },
+        {
+          "index": 1,
+          "mapping": {
+            "signal": "rx_valid",
+            "path": []
+          },
+          "width": 1,
+          "probe_type": "DATA_AND_TRIGGER",
+          "mu_cnt": 1,
+          "label": "",
+          "snapshot": {
+            "name": "rx_valid",
+            "width": 1,
+            "kind": "port_out",
+            "type_summary": "std_logic"
+          }
+        },
+        {
+          "index": 2,
+          "mapping": {
+            "signal": "rx_byte",
+            "path": []
+          },
+          "width": 8,
+          "probe_type": "DATA",
+          "mu_cnt": 1,
+          "label": "",
+          "snapshot": {
+            "name": "rx_byte",
+            "width": 8,
+            "kind": "port_out",
+            "type_summary": "std_logic_vector(7 downto 0)"
+          }
+        },
+        {
+          "index": 3,
+          "mapping": {
+            "signal": "state",
+            "path": []
+          },
+          "width": 3,
+          "probe_type": "DATA_AND_TRIGGER",
+          "mu_cnt": 1,
+          "label": "",
+          "snapshot": {
+            "name": "state",
+            "width": 3,
+            "kind": "signal",
+            "type_summary": "enum"
+          }
+        },
+        {
+          "index": 4,
+          "mapping": {
+            "signal": "packet_cnt",
+            "path": []
+          },
+          "width": 16,
+          "probe_type": "DATA",
+          "mu_cnt": 1,
+          "label": "",
+          "snapshot": {
+            "name": "packet_cnt",
+            "width": 16,
+            "kind": "signal",
+            "type_summary": "unsigned(15 downto 0)"
+          }
+        }
+      ]
+    }
+  ]
+}

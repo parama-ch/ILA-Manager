@@ -1,0 +1,30 @@
+name: Bug Report
+description: Report a bug or incorrect HDL/TCL generation
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting an issue! Please describe the problem below.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: hdl_snippet
+    attributes:
+      label: Sample HDL / TCL Code
+      description: If possible, provide the minimal HDL snippet or TCL that reproduces the issue.
+      render: vhdl
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS version, Python version, browser, Vivado version (e.g. Ubuntu 22.04, Python 3.11, Chrome, Vivado 2023.2).
