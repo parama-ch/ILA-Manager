@@ -1,7 +1,7 @@
 # ILA Manager 🔍
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![AMD Vivado](https://img.shields.io/badge/EDA-AMD%20Vivado-red.svg)](https://www.xilinx.com/products/design-tools/vivado.html)
 [![CI](https://github.com/parama-ch/ILA-Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/parama-ch/ILA-Manager/actions)
 
