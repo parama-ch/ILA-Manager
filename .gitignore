@@ -71,3 +71,42 @@ coverage.xml
 # Operating System
 .DS_Store
 Thumbs.db
+
+# AI Agent Workflows & Metadata
+.agents/
+*.agents
+*agent*.md*
+*Agent*.md*
+*AGENT*.md*
+*handoff*.md*
+*Handoff*.md*
+*HANDOFF*.md*
+*gemini*.md*
+*Gemini*.md*
+*GEMINI*.md*
+*claude*.md*
+*Claude*.md*
+*CLAUDE*.md*
+.cursorrules
+*_transcripts/
+*.agent.log
+
+# Secrets & Environment Configurations
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+*secret*.json
+client_secret*.json
+
+# Backup Archives & Staging
+*.tar.gz
+*.tgz
+*.zip
+gdrive_backup/
+scripts/
+
