@@ -48,7 +48,7 @@ def resolve_selection(
         if width is None:
             width = 1
 
-        is_bit = (curr_type.kind == "bit") if curr_type else (width == 1)
+        is_bit = (curr_type.kind == "bit") if (curr_type and curr_type.kind != "unknown") else (width == 1)
         base = (curr_type.base or "").lower() if curr_type else ""
 
         # VHDL conversions for standard types
@@ -87,18 +87,15 @@ def resolve_selection(
 
     # Walk the path steps
     for step in mapping.path:
-        if curr_type is None:
-            break
-
         if isinstance(step, IndexStep):
             vhdl_parts.append(f"({step.index})")
             verilog_parts.append(f"[{step.index}]")
-            curr_type = curr_type.element
+            curr_type = curr_type.element if curr_type else None
 
         elif isinstance(step, FieldStep):
             vhdl_parts.append(f".{step.field}")
             verilog_parts.append(f".{step.field}")
-            curr_type = curr_type.fields.get(step.field)
+            curr_type = curr_type.fields.get(step.field) if (curr_type and curr_type.fields) else None
 
         elif isinstance(step, RangeStep):
             dir_str = "to" if step.ascending else "downto"
@@ -109,7 +106,7 @@ def resolve_selection(
                 left=step.left,
                 right=step.right,
                 ascending=step.ascending,
-                base=curr_type.base,
+                base=curr_type.base if curr_type else "",
             )
 
         elif isinstance(step, BitStep):
@@ -117,11 +114,11 @@ def resolve_selection(
             verilog_parts.append(f"[{step.bit}]")
             curr_type = TypeNode(kind="bit", base="std_logic")
 
-    width = curr_type.computed_width() if curr_type else 1
+    width = curr_type.computed_width() if curr_type else None
     if width is None:
         width = 1
 
-    is_bit = (curr_type.kind == "bit") if curr_type else (width == 1)
+    is_bit = (curr_type.kind == "bit") if (curr_type and curr_type.kind != "unknown") else (width == 1)
     base = (curr_type.base or "").lower() if curr_type else ""
 
     vhdl_str = "".join(vhdl_parts)

@@ -57,6 +57,7 @@
             <button class="filter-btn active" data-filter="all" data-i18n="filter_all">All</button>
             <button class="filter-btn" data-filter="ports" data-i18n="filter_ports">Ports</button>
             <button class="filter-btn" data-filter="signals" data-i18n="filter_signals">Signals</button>
+            <button class="filter-btn" data-filter="unknown" data-i18n="filter_unknown">⚠️ Unknown</button>
           </div>
         </div>
 
@@ -129,6 +130,13 @@
         </div>
 
         <!-- Probes Table -->
+        <div class="warning-banner hidden" id="probes-warning-banner">
+          <span class="warning-banner-icon">⚠️</span>
+          <div class="warning-banner-content">
+            <div class="warning-banner-title" data-i18n="probes_warn_title">Unresolved Probe Types Defaulted to 1-Bit</div>
+            <div class="warning-banner-desc" id="probes-warning-text"></div>
+          </div>
+        </div>
         <div class="probe-table-container">
           <table class="probe-table" id="probes-table">
             <thead>
@@ -160,6 +168,13 @@
         <div class="code-floating-actions">
           <button class="btn btn-sm" id="btn-copy-code" data-i18n="copy_code">📋 Copy</button>
           <button class="btn btn-sm" id="btn-download-code" data-i18n="download_code">⬇ Download</button>
+        </div>
+        <div class="warning-banner hidden" id="code-warning-banner">
+          <span class="warning-banner-icon">⚠️</span>
+          <div class="warning-banner-content">
+            <div class="warning-banner-title" data-i18n="probes_warn_title">Unresolved Probe Types Defaulted to 1-Bit</div>
+            <div class="warning-banner-desc" data-i18n="code_warn_desc">Warning: Code contains probes with unresolved types defaulted to 1-bit. Please verify probe widths before synthesis.</div>
+          </div>
         </div>
         <pre class="code-block"><code id="code-output"># Code will appear here...</code></pre>
       </div>
@@ -210,6 +225,10 @@
         <div class="form-group" id="group-bit-range">
           <label for="slice-input-range" data-i18n="slice_range">Bit Range (e.g. 15 downto 8 or [15:8]):</label>
           <input type="text" id="slice-input-range" placeholder="e.g. 7 downto 0">
+        </div>
+        <div class="form-group" id="group-slice-width">
+          <label for="slice-input-width" data-i18n="slice_width">Resulting Bit Width (override):</label>
+          <input type="number" id="slice-input-width" min="1" max="4096" placeholder="Auto or enter width (e.g. 16)">
         </div>
       </div>
       <div class="modal-footer">

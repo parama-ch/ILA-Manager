@@ -40,6 +40,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-lang-toggle").addEventListener("click", async () => {
     const nextLang = currentLang === "en" ? "th" : "en";
     await setLanguage(nextLang);
+    renderProbes();
+    renderSignals();
   });
 
   // Theme toggle
@@ -125,13 +127,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 function setupFileDrop() {
   const dropZone = document.getElementById("hdl-drop-zone");
   const fileInput = document.getElementById("hdl-file-input");
+  const btnBrowse = document.getElementById("btn-browse-files");
+
+  if (btnBrowse) {
+    btnBrowse.addEventListener("click", () => {
+      fileInput.click();
+    });
+  }
 
   dropZone.addEventListener("click", () => {
     fileInput.click();
   });
 
   fileInput.addEventListener("change", (e) => {
-    handleLoadedFiles(e.target.files);
+    const files = Array.from(e.target.files);
+    handleLoadedFiles(files);
+    fileInput.value = "";
   });
 
   dropZone.addEventListener("dragover", (e) => {
@@ -153,19 +164,33 @@ function setupFileDrop() {
 }
 
 async function handleLoadedFiles(fileList) {
-  const fileObjects = [];
-  for (const file of fileList) {
-    const content = await file.text();
-    fileObjects.push({ filename: file.name, content: content });
-  }
-
+  const fileInput = document.getElementById("hdl-file-input");
   try {
-    const res = await parseHdlFiles({ files: fileObjects });
-    state.signalsByUnit = Object.assign(state.signalsByUnit, res.units || {});
+    if (!state.uploadedFiles) {
+      state.uploadedFiles = [];
+    }
+
+    for (const file of fileList) {
+      const content = await file.text();
+      const existingIdx = state.uploadedFiles.findIndex((f) => f.filename === file.name);
+      if (existingIdx >= 0) {
+        state.uploadedFiles[existingIdx] = { filename: file.name, content: content };
+      } else {
+        state.uploadedFiles.push({ filename: file.name, content: content });
+      }
+    }
+
+    const res = await parseHdlFiles({ files: state.uploadedFiles });
+    state.signalsByUnit = Object.assign({}, state.signalsByUnit, res.units || {});
     updateUnitSelector();
-    showToast(`Parsed ${fileObjects.length} HDL file(s)!`);
+    state.notify();
+    showToast(`Parsed ${state.uploadedFiles.length} HDL file(s)!`);
     await runDiffCheck();
   } catch (e) {
     alert(`Failed to parse HDL files: ${e.message}`);
+  } finally {
+    if (fileInput) {
+      fileInput.value = "";
+    }
   }
 }

@@ -26,6 +26,7 @@ export const state = {
   currentIlaIndex: 0,
   signalsByUnit: {},
   currentUnit: "",
+  uploadedFiles: [],
   activeTab: "tcl",
   listeners: [],
 

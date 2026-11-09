@@ -14,7 +14,7 @@ import uvicorn
 
 from ila_manager import __version__
 from ila_manager.generators import generate_tcl, generate_verilog, generate_vhdl
-from ila_manager.parser import parse_verilog, parse_vhdl
+from ila_manager.parser import parse_verilog, parse_vhdl, parse_vhdl_multi
 from ila_manager.project_io import load_project
 
 
@@ -49,15 +49,29 @@ def run_generate(args: argparse.Namespace) -> int:
 
     # Parse signals from sources
     all_signals = []
+    vhdl_sources = []
+    verilog_sources = []
     for sf in project.source_files:
         p = Path(sf)
         if p.is_file():
             text = p.read_text(encoding="utf-8", errors="replace")
-            parsed = parse_vhdl(text, filename=str(p)) if p.suffix.lower() in (".vhd", ".vhdl") else parse_verilog(text, filename=str(p))
+            if p.suffix.lower() in (".vhd", ".vhdl"):
+                vhdl_sources.append((str(p), text))
+            else:
+                verilog_sources.append((str(p), text))
+
+    if vhdl_sources:
+        vhdl_units, _ = parse_vhdl_multi(vhdl_sources)
+        for sigs in vhdl_units.values():
+            all_signals.extend(sigs)
+
+    if verilog_sources:
+        for fname, text in verilog_sources:
+            parsed = parse_verilog(text, filename=fname)
             for sigs in parsed.values():
                 all_signals.extend(sigs)
 
-    tcl_code = generate_tcl(ila)
+    tcl_code = generate_tcl(ila, signals=all_signals)
     vhdl_code = generate_vhdl(ila, signals=all_signals)
     verilog_code = generate_verilog(ila, signals=all_signals)
 

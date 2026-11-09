@@ -38,9 +38,23 @@ export function initOutputPanel() {
 
 export async function refreshGeneratedCode() {
   const ila = state.getCurrentIla();
-  if (!ila) return;
+  const codeBanner = document.getElementById("code-warning-banner");
+  if (!ila) {
+    if (codeBanner) codeBanner.classList.add("hidden");
+    return;
+  }
 
   const signals = state.getCurrentSignals();
+  const hasUnresolved = ila.probes.some((p) => {
+    if (!p.mapping || !p.mapping.signal) return false;
+    const s = signals.find((sig) => sig.name === p.mapping.signal);
+    return !s || !s.type || s.type.kind === "unknown" || s.width === null || s.is_unknown;
+  });
+
+  if (codeBanner) {
+    codeBanner.classList.toggle("hidden", !hasUnresolved);
+  }
+
   try {
     const res = await generateCode(ila, signals);
     generatedOutput = res;

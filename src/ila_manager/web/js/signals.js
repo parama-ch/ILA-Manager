@@ -4,6 +4,7 @@
 
 import { state } from "./state.js";
 import { openSliceModal } from "./probes.js";
+import { t } from "./i18n.js";
 
 let currentFilter = "all";
 let searchQuery = "";
@@ -69,9 +70,12 @@ export function renderSignals() {
 
   const signals = state.getCurrentSignals();
   const filtered = signals.filter((sig) => {
+    const isUnknown = !sig.type || sig.type.kind === "unknown" || sig.width === null || sig.is_unknown;
+
     // Filter by type
     if (currentFilter === "ports" && !sig.kind.startsWith("port")) return false;
     if (currentFilter === "signals" && sig.kind !== "signal") return false;
+    if (currentFilter === "unknown" && !isUnknown) return false;
 
     // Filter by search query
     if (searchQuery) {
@@ -86,6 +90,7 @@ export function renderSignals() {
   }
 
   filtered.forEach((sig) => {
+    const isUnknown = !sig.type || sig.type.kind === "unknown" || sig.width === null || sig.is_unknown;
     const item = document.createElement("div");
     item.className = "signal-item";
     item.draggable = true;
@@ -119,10 +124,27 @@ export function renderSignals() {
     nameEl.title = `${sig.name}: ${sig.summary || ""}`;
     info.appendChild(nameEl);
 
+    // Unknown Type Warning Badge
+    if (isUnknown) {
+      const unkBadge = document.createElement("span");
+      unkBadge.className = "badge badge-unknown";
+      unkBadge.textContent = "⚠️ Unknown Type";
+      const typeName = (sig.type && (sig.type.base || sig.type.kind)) || sig.summary || "unresolved";
+      const tooltipTemplate = t(
+        "unknown_type_tooltip",
+        "Type '{type}' is unresolved. Please upload the package VHDL file or manually adjust bit width."
+      );
+      unkBadge.title = tooltipTemplate.replace("{type}", typeName);
+      info.appendChild(unkBadge);
+    }
+
     // Width badge
     const wBadge = document.createElement("span");
-    wBadge.className = "badge badge-width";
-    wBadge.textContent = `${sig.width || 1}b`;
+    wBadge.className = `badge badge-width ${isUnknown ? "badge-width-unknown" : ""}`;
+    wBadge.textContent = isUnknown ? "?b (def 1b)" : `${sig.width || 1}b`;
+    if (isUnknown) {
+      wBadge.title = "Type unresolved: defaulted to 1-bit. Click ✂ to configure slice or width.";
+    }
     info.appendChild(wBadge);
 
     // Actions
@@ -130,18 +152,20 @@ export function renderSignals() {
     actions.style.display = "flex";
     actions.style.gap = "4px";
 
-    // Slice / Tree config button if vector/array/record
+    // Slice / Tree config button if vector/array/record/unknown
     const canSlice =
-      sig.type &&
-      (sig.type.kind === "vector" ||
-        sig.type.kind === "array" ||
-        sig.type.kind === "record");
+      (sig.type &&
+        (sig.type.kind === "vector" ||
+          sig.type.kind === "array" ||
+          sig.type.kind === "record" ||
+          sig.type.kind === "unknown")) ||
+      isUnknown;
 
     if (canSlice) {
       const sliceBtn = document.createElement("button");
       sliceBtn.className = "icon-btn";
       sliceBtn.innerHTML = "✂";
-      sliceBtn.title = "Configure bit-slice or array index";
+      sliceBtn.title = "Configure bit-slice, array index, or manual width";
       sliceBtn.addEventListener("click", () => {
         openSliceModal(sig);
       });

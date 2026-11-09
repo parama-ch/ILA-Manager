@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +15,7 @@ from ila_manager.diff import compute_diff
 from ila_manager.generators import generate_tcl, generate_verilog, generate_vhdl
 from ila_manager.importers import import_from_hdl, import_from_tcl
 from ila_manager.models import Ila, Project, Signal
-from ila_manager.parser import parse_verilog, parse_vhdl
+from ila_manager.parser import parse_verilog, parse_vhdl_multi
 from ila_manager.project_io import load_project, save_project
 
 app = FastAPI(
@@ -78,9 +78,11 @@ class ImportTclRequest(BaseModel):
 
 @app.post("/api/hdl/parse")
 async def api_parse_hdl(req: ParseRequest) -> Dict[str, Any]:
-    """Parse one or more HDL files provided by disk path or raw content."""
+    """Parse one or more HDL files provided by disk path or raw content using two-pass parsing."""
     units: Dict[str, List[Dict[str, Any]]] = {}
     parsed_files: List[str] = []
+    vhdl_sources: List[Tuple[str, str]] = []
+    verilog_sources: List[Tuple[str, str]] = []
 
     # 1. Parse from on-disk paths
     if req.paths:
@@ -91,14 +93,10 @@ async def api_parse_hdl(req: ParseRequest) -> Dict[str, Any]:
             try:
                 text = p.read_text(encoding="utf-8", errors="replace")
                 ext = p.suffix.lower()
-                is_vhdl = ext in (".vhd", ".vhdl")
-                parsed = (
-                    parse_vhdl(text, filename=str(p))
-                    if is_vhdl
-                    else parse_verilog(text, filename=str(p))
-                )
-                for unit_name, sig_list in parsed.items():
-                    units[unit_name] = [s.to_dict() for s in sig_list]
+                if ext in (".vhd", ".vhdl"):
+                    vhdl_sources.append((str(p), text))
+                else:
+                    verilog_sources.append((str(p), text))
                 parsed_files.append(str(p))
             except Exception:
                 pass
@@ -107,17 +105,29 @@ async def api_parse_hdl(req: ParseRequest) -> Dict[str, Any]:
     if req.files:
         for f in req.files:
             ext = Path(f.filename).suffix.lower()
-            is_vhdl = ext in (".vhd", ".vhdl")
-            parsed = (
-                parse_vhdl(f.content, filename=f.filename)
-                if is_vhdl
-                else parse_verilog(f.content, filename=f.filename)
-            )
-            for unit_name, sig_list in parsed.items():
-                units[unit_name] = [s.to_dict() for s in sig_list]
+            if ext in (".vhd", ".vhdl"):
+                vhdl_sources.append((f.filename, f.content))
+            else:
+                verilog_sources.append((f.filename, f.content))
             parsed_files.append(f.filename)
 
-    return {"units": units, "files": parsed_files}
+    package_names: List[str] = []
+
+    # Two-pass parsing for all gathered VHDL files
+    if vhdl_sources:
+        vhdl_units, pkgs = parse_vhdl_multi(vhdl_sources)
+        package_names.extend(pkgs)
+        for unit_name, sig_list in vhdl_units.items():
+            units[unit_name] = [s.to_dict() for s in sig_list]
+
+    # Parsing for Verilog files
+    if verilog_sources:
+        for fname, content in verilog_sources:
+            parsed = parse_verilog(content, filename=fname)
+            for unit_name, sig_list in parsed.items():
+                units[unit_name] = [s.to_dict() for s in sig_list]
+
+    return {"units": units, "files": parsed_files, "packages": package_names}
 
 
 @app.post("/api/import/hdl-instance")
@@ -142,7 +152,7 @@ async def api_generate(req: GenerateRequest) -> Dict[str, str]:
     ila = Ila.from_dict(req.ila)
     signals = [Signal.from_dict(s) for s in (req.signals or [])]
 
-    tcl_code = generate_tcl(ila)
+    tcl_code = generate_tcl(ila, signals=signals)
     vhdl_code = generate_vhdl(ila, signals=signals)
     verilog_code = generate_verilog(ila, signals=signals)
 

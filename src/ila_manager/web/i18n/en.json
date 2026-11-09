@@ -59,5 +59,11 @@
   "slice_title": "Configure Bit Slice / Array Index",
   "slice_range": "Bit Range (e.g. 15 downto 8 or [15:8]):",
   "slice_index": "Array Index:",
-  "slice_apply": "Apply Mapping"
+  "slice_apply": "Apply Mapping",
+  "filter_unknown": "⚠️ Unknown",
+  "unknown_type_tooltip": "Type '{type}' is unresolved. Please upload the package VHDL file or manually adjust bit width.",
+  "probes_warn_title": "Unresolved Probe Types Defaulted to 1-Bit",
+  "probes_warn_desc": "The following probe(s) have unresolved types and were defaulted to 1-bit: {probes}. Verify actual bus width in the table or upload the package VHDL file.",
+  "code_warn_desc": "Warning: 1 or more probes have unresolved types and were defaulted to 1-bit. Synthesis may fail if actual bus widths differ.",
+  "slice_width": "Resulting Bit Width (override):"
 }

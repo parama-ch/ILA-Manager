@@ -26,6 +26,8 @@ class TypeNode:
     base: str = ""  # Raw base name: std_logic_vector, unsigned, signed, logic, etc.
     width_expr: Optional[str] = None  # Text of unresolved expression if any
     enum_literals: List[str] = field(default_factory=list)
+    package: Optional[str] = None
+    is_unconstrained: bool = False
 
     def computed_width(self) -> Optional[int]:
         """Compute the bit width of this type if bounds are known."""
@@ -109,6 +111,8 @@ class TypeNode:
             "base": self.base,
             "width_expr": self.width_expr,
             "enum_literals": list(self.enum_literals),
+            "package": self.package,
+            "is_unconstrained": self.is_unconstrained,
         }
 
     @classmethod
@@ -129,7 +133,143 @@ class TypeNode:
             base=data.get("base", ""),
             width_expr=data.get("width_expr"),
             enum_literals=data.get("enum_literals", []),
+            package=data.get("package"),
+            is_unconstrained=bool(data.get("is_unconstrained", False)),
         )
+
+
+@dataclass
+class PackageDefinition:
+    """Definition of an HDL package extracted in Pass 1."""
+
+    name: str  # Lowercase normalized package name
+    file: str = ""  # Source file path
+    line: int = 1  # Line number of declaration
+    constants: Dict[str, int] = field(default_factory=dict)  # Name -> integer value
+    types: Dict[str, TypeNode] = field(default_factory=dict)  # Name -> TypeNode
+    use_clauses: List[str] = field(default_factory=list)  # ['work.common_pkg.all', ...]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "file": self.file,
+            "line": self.line,
+            "constants": dict(self.constants),
+            "types": {k: v.to_dict() for k, v in self.types.items()},
+            "use_clauses": list(self.use_clauses),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> PackageDefinition:
+        types_map: Dict[str, TypeNode] = {}
+        for k, v in data.get("types", {}).items():
+            node = TypeNode.from_dict(v)
+            if node is not None:
+                types_map[k] = node
+        return cls(
+            name=data["name"],
+            file=data.get("file", ""),
+            line=data.get("line", 1),
+            constants=dict(data.get("constants", {})),
+            types=types_map,
+            use_clauses=list(data.get("use_clauses", [])),
+        )
+
+
+@dataclass
+class PackageRegistry:
+    """Aggregated registry of all packages, types, and constants across the project."""
+
+    packages: Dict[str, PackageDefinition] = field(default_factory=dict)
+
+    def add_package(self, pkg: PackageDefinition) -> None:
+        self.packages[pkg.name.lower()] = pkg
+
+    def get_package(self, name: str) -> Optional[PackageDefinition]:
+        return self.packages.get(name.lower())
+
+    def resolve_type(
+        self,
+        type_name: str,
+        imported_packages: Optional[List[str]] = None,
+    ) -> Optional[TypeNode]:
+        clean = type_name.strip().lower()
+        # 1. Check if qualified: work.pkg.type or pkg.type
+        if "." in clean:
+            parts = clean.split(".")
+            if parts[0] == "work" and len(parts) >= 3:
+                pkg = self.packages.get(parts[1])
+                if pkg and parts[2] in pkg.types:
+                    return pkg.types[parts[2]]
+            elif len(parts) == 2:
+                pkg = self.packages.get(parts[0])
+                if pkg and parts[1] in pkg.types:
+                    return pkg.types[parts[1]]
+
+        # 2. Check active imported packages
+        if imported_packages:
+            for pkg_name in imported_packages:
+                pkg = self.packages.get(pkg_name.lower())
+                if pkg and clean in pkg.types:
+                    return pkg.types[clean]
+
+        # 3. Global project lookup (unambiguous)
+        matches = [pkg.types[clean] for pkg in self.packages.values() if clean in pkg.types]
+        if len(matches) == 1:
+            return matches[0]
+
+        return None
+
+    def resolve_constant(
+        self,
+        const_name: str,
+        imported_packages: Optional[List[str]] = None,
+    ) -> Optional[int]:
+        clean = const_name.strip().lower()
+        if "." in clean:
+            parts = clean.split(".")
+            if parts[0] == "work" and len(parts) >= 3:
+                pkg = self.packages.get(parts[1])
+                if pkg and parts[2] in pkg.constants:
+                    return pkg.constants[parts[2]]
+            elif len(parts) == 2:
+                pkg = self.packages.get(parts[0])
+                if pkg and parts[1] in pkg.constants:
+                    return pkg.constants[parts[1]]
+
+        if imported_packages:
+            for pkg_name in imported_packages:
+                pkg = self.packages.get(pkg_name.lower())
+                if pkg and clean in pkg.constants:
+                    return pkg.constants[clean]
+
+        for pkg in self.packages.values():
+            if clean in pkg.constants:
+                return pkg.constants[clean]
+        return None
+
+    def all_types(self) -> Dict[str, TypeNode]:
+        merged: Dict[str, TypeNode] = {}
+        for pkg in self.packages.values():
+            merged.update(pkg.types)
+        return merged
+
+    def all_constants(self) -> Dict[str, int]:
+        merged: Dict[str, int] = {}
+        for pkg in self.packages.values():
+            merged.update(pkg.constants)
+        return merged
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {k: v.to_dict() for k, v in self.packages.items()}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> PackageRegistry:
+        reg = cls()
+        if data and isinstance(data, dict):
+            for k, v in data.items():
+                reg.packages[k.lower()] = PackageDefinition.from_dict(v)
+        return reg
 
 
 @dataclass
@@ -142,6 +282,16 @@ class Signal:
     line: int
     file: str = ""
 
+    @property
+    def is_unknown(self) -> bool:
+        if not self.type:
+            return True
+        if self.type.kind == "unknown":
+            return True
+        if self.type.computed_width() is None and not getattr(self.type, "is_unconstrained", False):
+            return True
+        return False
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
@@ -151,6 +301,8 @@ class Signal:
             "file": self.file,
             "width": self.type.computed_width(),
             "summary": self.type.summary(),
+            "is_unknown": self.is_unknown,
+            "package": self.type.package if self.type else None,
         }
 
     @classmethod
@@ -413,6 +565,7 @@ class Project:
     version: int = 1
     source_files: List[str] = field(default_factory=list)
     ilas: List[Ila] = field(default_factory=list)
+    package_registry: PackageRegistry = field(default_factory=PackageRegistry)
 
     def get_ila(self, name: str) -> Optional[Ila]:
         for ila in self.ilas:
@@ -429,12 +582,15 @@ class Project:
             "version": self.version,
             "source_files": list(self.source_files),
             "ilas": [ila.to_dict() for ila in self.ilas],
+            "package_registry": self.package_registry.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Project:
+        pkg_reg_data = data.get("package_registry", {})
         return cls(
             version=int(data.get("version", 1)),
             source_files=list(data.get("source_files", [])),
             ilas=[Ila.from_dict(d) for d in data.get("ilas", [])],
+            package_registry=PackageRegistry.from_dict(pkg_reg_data),
         )

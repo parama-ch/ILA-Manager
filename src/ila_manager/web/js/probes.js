@@ -67,16 +67,51 @@ export function renderProbes() {
   tbody.innerHTML = "";
 
   const ila = state.getCurrentIla();
+  const banner = document.getElementById("probes-warning-banner");
+  const bannerText = document.getElementById("probes-warning-text");
+
   if (!ila || ila.probes.length === 0) {
+    if (banner) banner.classList.add("hidden");
     tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
       No probes configured. Drag signals here or click <b>+ Add Probe</b>.
     </td></tr>`;
     return;
   }
 
+  const signals = state.getCurrentSignals();
+  const unknownProbes = [];
   ila.probes.forEach((probe, idx) => {
+    if (probe.mapping && probe.mapping.signal) {
+      const sig = signals.find((s) => s.name === probe.mapping.signal);
+      const isUnk = !sig || !sig.type || sig.type.kind === "unknown" || sig.width === null || sig.is_unknown;
+      if (isUnk) {
+        unknownProbes.push({ index: idx, signal: probe.mapping.signal, width: probe.width });
+      }
+    }
+  });
+
+  // Toggle Probe Manager Banner
+  if (banner) {
+    if (unknownProbes.length > 0) {
+      const probeListStr = unknownProbes.map((p) => `probe${p.index} (${p.signal})`).join(", ");
+      if (bannerText) {
+        const template = t(
+          "probes_warn_desc",
+          "The following probe(s) have unresolved types and were defaulted to 1-bit: {probes}. Verify actual bus width in the table or upload the package VHDL file."
+        );
+        bannerText.textContent = template.replace("{probes}", probeListStr);
+      }
+      banner.classList.remove("hidden");
+    } else {
+      banner.classList.add("hidden");
+    }
+  }
+
+  ila.probes.forEach((probe, idx) => {
+    const sig = probe.mapping ? signals.find((s) => s.name === probe.mapping.signal) : null;
+    const isUnk = probe.mapping && (!sig || !sig.type || sig.type.kind === "unknown" || sig.width === null || sig.is_unknown);
     const tr = document.createElement("tr");
-    tr.className = `probe-row ${!probe.mapping ? "unmapped" : ""}`;
+    tr.className = `probe-row ${!probe.mapping ? "unmapped" : ""} ${isUnk ? "probe-row-warning" : ""}`;
     tr.draggable = true;
 
     // Probe Row Drag & Drop (reorder or swap)
@@ -285,6 +320,17 @@ export function openSwapModal(preselectA = 0) {
   modal.classList.remove("hidden");
 }
 
+function computeElemWidth(elem) {
+  if (!elem) return 1;
+  if (typeof elem.computed_width === "function") return elem.computed_width();
+  if (typeof elem.width === "number") return elem.width;
+  if (elem.kind === "vector" && elem.left !== null && elem.right !== null && elem.left !== undefined && elem.right !== undefined) {
+    return Math.abs(elem.left - elem.right) + 1;
+  }
+  if (elem.kind === "bit" || elem.kind === "boolean") return 1;
+  return elem.width || 1;
+}
+
 export function openSliceModal(signal, probeIndex = null) {
   activeSliceTarget = { signal, probeIndex };
   const modal = document.getElementById("modal-slice");
@@ -292,14 +338,25 @@ export function openSliceModal(signal, probeIndex = null) {
   const grpArr = document.getElementById("group-array-idx");
   const grpRec = document.getElementById("group-record-field");
   const grpRange = document.getElementById("group-bit-range");
+  const grpWidth = document.getElementById("group-slice-width");
 
-  info.textContent = `${signal.name} (${signal.type ? signal.type.kind : "signal"})`;
+  const idxInput = document.getElementById("slice-input-idx");
+  const rangeInput = document.getElementById("slice-input-range");
+  const widthInput = document.getElementById("slice-input-width");
 
-  // Array index field
+  // Reset inputs
+  if (idxInput) idxInput.value = "";
+  if (rangeInput) rangeInput.value = "";
+  if (widthInput) widthInput.value = "";
+
+  const isUnknown = !signal.type || signal.type.kind === "unknown" || signal.width === null || signal.is_unknown;
+  info.textContent = `${signal.name} (${signal.type ? (signal.type.base || signal.type.kind) : (isUnknown ? "unknown type" : "signal")})`;
+
+  // Array index field: display if array OR unknown
   const isArr = signal.type && signal.type.kind === "array";
-  grpArr.style.display = isArr ? "flex" : "none";
+  grpArr.style.display = (isArr || isUnknown) ? "flex" : "none";
 
-  // Record fields
+  // Record fields: display if record
   const isRec = signal.type && signal.type.kind === "record";
   grpRec.style.display = isRec ? "flex" : "none";
   const selField = document.getElementById("slice-select-field");
@@ -313,9 +370,14 @@ export function openSliceModal(signal, probeIndex = null) {
     });
   }
 
-  // Bit range
+  // Bit range: display if vector OR array OR unknown
   const isVec = signal.type && (signal.type.kind === "vector" || signal.type.kind === "array");
-  grpRange.style.display = isVec ? "flex" : "none";
+  grpRange.style.display = (isVec || isUnknown) ? "flex" : "none";
+
+  // Manual width override group
+  if (grpWidth) {
+    grpWidth.style.display = "flex";
+  }
 
   modal.classList.remove("hidden");
 }
@@ -326,34 +388,48 @@ function applySliceModal() {
   const path = [];
   let computedW = sig.width || 1;
 
-  // Array index
+  // 1. Array index
   const idxInput = document.getElementById("slice-input-idx");
   if (idxInput.offsetParent !== null && idxInput.value !== "") {
     path.push({ step: "index", index: parseInt(idxInput.value, 10) });
+    if (sig.type && sig.type.kind === "array") {
+      computedW = sig.type.element
+        ? (typeof sig.type.element.computed_width === "function"
+            ? sig.type.element.computed_width()
+            : (sig.type.element.width || computeElemWidth(sig.type.element)))
+        : 1;
+    }
   }
 
-  // Record field
+  // 2. Record field
   const selField = document.getElementById("slice-select-field");
   if (selField.offsetParent !== null && selField.value) {
     path.push({ step: "field", field: selField.value });
+    if (sig.type && sig.type.fields && sig.type.fields[selField.value]) {
+      const fObj = sig.type.fields[selField.value];
+      computedW = typeof fObj.computed_width === "function"
+        ? fObj.computed_width()
+        : (fObj.width || computeElemWidth(fObj));
+    }
   }
 
-  // Bit range (e.g. 15 downto 8 or 7:0)
+  // 3. Bit range (e.g. 15 downto 8 or 7:0)
   const rangeInput = document.getElementById("slice-input-range");
   if (rangeInput.offsetParent !== null && rangeInput.value.trim()) {
     const raw = rangeInput.value.trim();
     const mDownto = raw.match(/(\d+)\s+downto\s+(\d+)/i);
     const mTo = raw.match(/(\d+)\s+to\s+(\d+)/i);
     const mColon = raw.match(/\[?\s*(\d+)\s*:\s*(\d+)\s*\]?/);
+    const mSingle = raw.match(/^\[?\(?\s*(\d+)\s*\)?\]?$/);
 
     if (mDownto) {
-      const l = parseInt(mDownto.group(1), 10);
-      const r = parseInt(mDownto.group(2), 10);
+      const l = parseInt(mDownto[1], 10);
+      const r = parseInt(mDownto[2], 10);
       path.push({ step: "range", left: l, right: r, ascending: false });
       computedW = Math.abs(l - r) + 1;
     } else if (mTo) {
-      const l = parseInt(mTo.group(1), 10);
-      const r = parseInt(mTo.group(2), 10);
+      const l = parseInt(mTo[1], 10);
+      const r = parseInt(mTo[2], 10);
       path.push({ step: "range", left: l, right: r, ascending: true });
       computedW = Math.abs(l - r) + 1;
     } else if (mColon) {
@@ -361,10 +437,19 @@ function applySliceModal() {
       const r = parseInt(mColon[2], 10);
       path.push({ step: "range", left: l, right: r, ascending: l < r });
       computedW = Math.abs(l - r) + 1;
-    } else if (/^\d+$/.test(raw)) {
-      const bitVal = parseInt(raw, 10);
+    } else if (mSingle) {
+      const bitVal = parseInt(mSingle[1], 10);
       path.push({ step: "bit", bit: bitVal });
       computedW = 1;
+    }
+  }
+
+  // 4. Manual width override (takes precedence if provided and >= 1)
+  const widthInput = document.getElementById("slice-input-width");
+  if (widthInput && widthInput.value !== "") {
+    const overrideW = parseInt(widthInput.value, 10);
+    if (!isNaN(overrideW) && overrideW >= 1) {
+      computedW = overrideW;
     }
   }
 
